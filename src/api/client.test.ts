@@ -12,7 +12,11 @@ describe('slide API', () => {
   });
 
   it('HTTP 에러를 성공 데이터로 취급하지 않는다', async () => {
-    server.use(http.get('/api/slides', () => HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })));
+    server.use(
+      http.get('/api/slides', () =>
+        HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 }),
+      ),
+    );
     await expect(getSlides({ page: 1, q: '' })).rejects.toThrow('Internal Server Error');
   });
 });

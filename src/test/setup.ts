@@ -13,7 +13,12 @@ beforeAll(() => {
   // Node의 fetch는 상대 경로('/api/...')를 해석하지 못하므로 jsdom origin 기준으로 보정
   const mswFetch = globalThis.fetch;
   globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
-    mswFetch(typeof input === 'string' && input.startsWith('/') ? new URL(input, window.location.origin) : input, init);
+    mswFetch(
+      typeof input === 'string' && input.startsWith('/')
+        ? new URL(input, window.location.origin)
+        : input,
+      init,
+    );
 });
 
 afterEach(() => {
