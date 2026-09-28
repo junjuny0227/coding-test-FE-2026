@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from './mocks/node';
@@ -49,6 +49,8 @@ describe('슬라이드 상세', () => {
     expect(screen.getByRole('img', { name: '슬라이드 원본 이미지' })).toBeInTheDocument();
     const overlay = screen.getByRole('img', { name: 'Heatmap 오버레이' });
     expect(overlay).toHaveStyle({ opacity: '0.5' });
+    fireEvent.change(screen.getByRole('slider', { name: 'Heatmap 투명도' }), { target: { value: '75' } });
+    expect(overlay).toHaveStyle({ opacity: '0.75' });
     await user.click(screen.getByRole('checkbox', { name: 'Heatmap 표시' }));
     expect(overlay).not.toBeInTheDocument();
   });
