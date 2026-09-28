@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from './mocks/node';
@@ -25,6 +25,22 @@ describe('슬라이드 목록', () => {
     await screen.findByRole('list', { name: '슬라이드 목록' });
     await user.type(screen.getByRole('searchbox', { name: '슬라이드 검색' }), '없는환자');
     expect(await screen.findByText('검색 결과가 없습니다.')).toBeInTheDocument();
+  });
+
+  it('연속 입력은 마지막 검색어로 한 번만 요청한다', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByRole('list', { name: '슬라이드 목록' });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await user.type(screen.getByRole('searchbox', { name: '슬라이드 검색' }), 'S-2026-0010');
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get('q')).toBe('S-2026-0010'));
+    await waitFor(() => expect(within(screen.getByRole('list', { name: '슬라이드 목록' })).getAllByRole('button')).toHaveLength(1));
+    const searches = fetchSpy.mock.calls
+      .map(([input]) => new URL(String(input), window.location.origin))
+      .filter((url) => url.pathname === '/api/slides' && url.searchParams.has('q'));
+    expect(searches).toHaveLength(1);
+    expect(searches[0].searchParams.get('q')).toBe('S-2026-0010');
+    fetchSpy.mockRestore();
   });
 
   it('목록 오류를 보여주고 재시도한다', async () => {
