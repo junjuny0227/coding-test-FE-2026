@@ -123,39 +123,60 @@ export default function App() {
   }
   return (
     <main className="app">
-      <h1>슬라이드 분석 결과 뷰어</h1>
-      <div className="viewer-layout"><section className="list-panel" aria-label="검사 목록">
-        <label htmlFor="slide-search">슬라이드 검색</label>
-        <input id="slide-search" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="슬라이드 ID 또는 환자명" />
-        {loading && <p role="status">목록을 불러오는 중입니다.</p>}
-        {!loading && error && <div role="alert"><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>목록 다시 시도</button></div>}
-        {!loading && !error && list && (list.items.length === 0 ? <p>검색 결과가 없습니다.</p> : (
-          <ul aria-label="슬라이드 목록" className="slide-list">
-            {list.items.map((slide) => (
-              <li key={slide.id}>
-                <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onKeyDown={onItemKeyDown} onClick={() => selectSlide(slide.id)}>
-                  <img src={slide.thumbnailUrl} alt="" />
-                  <span><strong>{slide.id}</strong><span>{maskPatientName(slide.patientName)}</span><time dateTime={slide.examinedAt}>{formatDate(slide.examinedAt)}</time></span>
-                  <span className={`badge ${slide.status}`}>{statusLabel(slide.status)}</span>
-                </button>
-              </li>
+      <header className="app-header">
+        <div className="app-identity" aria-hidden="true"><span className="identity-symbol" /></div>
+        <div>
+          <p className="app-kicker">PATHOLOGY / SLIDE REVIEW</p>
+          <h1>슬라이드 분석 결과</h1>
+          <p className="app-description">검사 기록을 선택해 이미지와 분석 수치를 확인하세요.</p>
+        </div>
+      </header>
+      <div className="viewer-layout">
+        <section className="list-panel" aria-label="검사 목록">
+          <div className="list-toolbar">
+            <div className="section-heading">
+              <h2>검사 목록</h2>
+              {!loading && !error && list && <span className="result-count">전체 {list.total.toLocaleString('ko-KR')}건</span>}
+            </div>
+            <label htmlFor="slide-search">슬라이드 검색</label>
+            <input id="slide-search" type="search" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="슬라이드 ID 또는 환자명" />
+          </div>
+          <div className="list-results">
+            {loading && <p className="state-message" role="status">목록을 불러오는 중입니다.</p>}
+            {!loading && error && <div className="state-message error-state" role="alert"><p>{error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>목록 다시 시도</button></div>}
+            {!loading && !error && list && (list.items.length === 0 ? <p className="state-message">검색 결과가 없습니다.</p> : (
+              <ul aria-label="슬라이드 목록" className="slide-list">
+                {list.items.map((slide) => (
+                  <li key={slide.id}>
+                    <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onKeyDown={onItemKeyDown} onClick={() => selectSlide(slide.id)}>
+                      <img src={slide.thumbnailUrl} alt="" />
+                      <span className="slide-item-info">
+                        <strong>{slide.id}</strong>
+                        <span className="patient-name">{maskPatientName(slide.patientName)}</span>
+                        <time dateTime={slide.examinedAt}>{formatDate(slide.examinedAt)}</time>
+                      </span>
+                      <span className={`badge ${slide.status}`}>{statusLabel(slide.status)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             ))}
-          </ul>
-        ))}
-        {!loading && !error && list && list.total > 0 && (
-          <nav aria-label="페이지 이동" className="pagination">
-            <button type="button" disabled={page <= 1} onClick={() => navigate({ q, page: page - 1, slide: null })}>이전 페이지</button>
-            <span>{page} / {totalPages}</span>
-            <button type="button" disabled={page >= totalPages} onClick={() => navigate({ q, page: page + 1, slide: null })}>다음 페이지</button>
-          </nav>
-        )}
-      </section>
-      <section className="detail-panel" aria-label="슬라이드 상세" ref={detailPanelRef} tabIndex={-1}>
-        {!selectedId && <p className="detail-empty">목록에서 슬라이드를 선택해 주세요.</p>}
-        {selectedId && detailLoading && <p role="status">상세를 불러오는 중입니다.</p>}
-        {selectedId && !detailLoading && detailError?.id === selectedId && <div role="alert"><p>{detailError.message}</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)}>상세 다시 시도</button></div>}
-        {selectedId && !detailLoading && detailError?.id !== selectedId && detail?.id === selectedId && <SlideDetailPanel key={selectedId} slide={detail} />}
-      </section></div>
+          </div>
+          {!loading && !error && list && list.total > 0 && (
+            <nav aria-label="페이지 이동" className="pagination">
+              <button type="button" disabled={page <= 1} onClick={() => navigate({ q, page: page - 1, slide: null })}>이전 페이지</button>
+              <span>{page} / {totalPages}</span>
+              <button type="button" disabled={page >= totalPages} onClick={() => navigate({ q, page: page + 1, slide: null })}>다음 페이지</button>
+            </nav>
+          )}
+        </section>
+        <section className="detail-panel" aria-label="슬라이드 상세" ref={detailPanelRef} tabIndex={-1}>
+          {!selectedId && <div className="detail-empty"><span className="empty-illustration" aria-hidden="true" /><h2>검사 결과 대기 중</h2><p>목록에서 슬라이드를 선택해 주세요.</p></div>}
+          {selectedId && detailLoading && <p className="state-message" role="status">상세를 불러오는 중입니다.</p>}
+          {selectedId && !detailLoading && detailError?.id === selectedId && <div className="state-message error-state" role="alert"><p>{detailError.message}</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)}>상세 다시 시도</button></div>}
+          {selectedId && !detailLoading && detailError?.id !== selectedId && detail?.id === selectedId && <SlideDetailPanel key={selectedId} slide={detail} />}
+        </section>
+      </div>
     </main>
   );
 }
