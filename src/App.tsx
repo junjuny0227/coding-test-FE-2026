@@ -4,25 +4,59 @@ import type { SlideDetail, SlideListResponse } from './api/types';
 import { formatDate, maskPatientName, statusLabel } from './utils/format';
 import { SlideDetailPanel } from './SlideDetailPanel';
 
+function readLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const rawPage = Number(params.get('page'));
+  return {
+    q: params.get('q') ?? '',
+    page: Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1,
+    slide: params.get('slide'),
+  };
+}
+
 export default function App() {
-  const [draft, setDraft] = useState('');
-  const [q, setQ] = useState('');
-  const [page, setPage] = useState(1);
+  const [initial] = useState(readLocation);
+  const [draft, setDraft] = useState(initial.q);
+  const [q, setQ] = useState(initial.q);
+  const [page, setPage] = useState(initial.page);
   const [list, setList] = useState<SlideListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initial.slide);
   const [detail, setDetail] = useState<SlideDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailRetry, setDetailRetry] = useState(0);
 
+  function navigate(next: { q: string; page: number; slide: string | null }) {
+    const url = new URL(window.location.href);
+    for (const key of ['q', 'page', 'slide']) url.searchParams.delete(key);
+    if (next.q) url.searchParams.set('q', next.q);
+    if (next.page !== 1) url.searchParams.set('page', String(next.page));
+    if (next.slide) url.searchParams.set('slide', next.slide);
+    window.history.pushState(null, '', url);
+    setQ(next.q);
+    setPage(next.page);
+    setSelectedId(next.slide);
+  }
+
+  useEffect(() => {
+    const restore = () => {
+      const next = readLocation();
+      setDraft(next.q);
+      setQ(next.q);
+      setPage(next.page);
+      setSelectedId(next.slide);
+    };
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (draft.trim() !== q) {
-        setQ(draft.trim());
-        setPage(1);
+        navigate({ q: draft.trim(), page: 1, slide: null });
       }
     }, 300);
     return () => window.clearTimeout(timer);
@@ -57,6 +91,13 @@ export default function App() {
   }, [selectedId, detailRetry]);
 
   const totalPages = Math.max(1, Math.ceil((list?.total ?? 0) / 20));
+  function onItemKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const buttons = Array.from(event.currentTarget.closest('ul')?.querySelectorAll<HTMLButtonElement>('button.slide-item') ?? []);
+    const target = buttons[buttons.indexOf(event.currentTarget) + (event.key === 'ArrowDown' ? 1 : -1)];
+    target?.focus();
+  }
   return (
     <main className="app">
       <h1>슬라이드 분석 결과 뷰어</h1>
@@ -69,7 +110,7 @@ export default function App() {
           <ul aria-label="슬라이드 목록" className="slide-list">
             {list.items.map((slide) => (
               <li key={slide.id}>
-                <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onClick={() => setSelectedId(slide.id)}>
+                <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onKeyDown={onItemKeyDown} onClick={() => navigate({ q, page, slide: slide.id })}>
                   <img src={slide.thumbnailUrl} alt="" />
                   <span><strong>{slide.id}</strong><span>{maskPatientName(slide.patientName)}</span><time dateTime={slide.examinedAt}>{formatDate(slide.examinedAt)}</time></span>
                   <span className={`badge ${slide.status}`}>{statusLabel(slide.status)}</span>
@@ -80,9 +121,9 @@ export default function App() {
         ))}
         {!loading && !error && list && list.total > 0 && (
           <nav aria-label="페이지 이동" className="pagination">
-            <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>이전 페이지</button>
+            <button type="button" disabled={page <= 1} onClick={() => navigate({ q, page: page - 1, slide: null })}>이전 페이지</button>
             <span>{page} / {totalPages}</span>
-            <button type="button" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>다음 페이지</button>
+            <button type="button" disabled={page >= totalPages} onClick={() => navigate({ q, page: page + 1, slide: null })}>다음 페이지</button>
           </nav>
         )}
       </section>
