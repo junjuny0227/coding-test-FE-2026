@@ -4,7 +4,10 @@ import { http, HttpResponse } from 'msw';
 import { server } from './mocks/node';
 import App from './App';
 
-afterEach(() => window.history.replaceState(null, '', '/'));
+afterEach(() => {
+  window.history.replaceState(null, '', '/');
+  vi.unstubAllGlobals();
+});
 
 describe('슬라이드 목록', () => {
   it('20건과 페이지 이동을 제공한다', async () => {
@@ -55,6 +58,59 @@ describe('슬라이드 목록', () => {
 });
 
 describe('슬라이드 상세', () => {
+  it('모바일에서 목록 항목을 선택하면 상세로 이동한다', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    const user = userEvent.setup();
+    render(<App />);
+    const panel = screen.getByRole('region', { name: '슬라이드 상세' });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', { value: scrollIntoView });
+    const items = within(await screen.findByRole('list', { name: '슬라이드 목록' })).getAllByRole('button');
+    expect(items).toHaveLength(20);
+    await user.click(items[0]);
+    await screen.findByRole('img', { name: '슬라이드 원본 이미지' });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' }));
+    expect(panel).toHaveFocus();
+    await user.click(items[0]);
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it('데스크톱에서는 선택해도 화면을 이동하지 않는다', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })));
+    const user = userEvent.setup();
+    render(<App />);
+    const panel = screen.getByRole('region', { name: '슬라이드 상세' });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', { value: scrollIntoView });
+    await user.click((await screen.findAllByRole('button', { name: /S-2026-/ }))[0]);
+    await screen.findByRole('img', { name: '슬라이드 원본 이미지' });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('모바일 공유 URL을 열 때는 자동으로 스크롤하지 않는다', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    window.history.replaceState(null, '', '/?slide=S-2026-0010');
+    render(<App />);
+    const panel = screen.getByRole('region', { name: '슬라이드 상세' });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', { value: scrollIntoView });
+    await screen.findByRole('img', { name: '슬라이드 원본 이미지' });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('모바일 상세 오류도 선택 후 바로 확인할 수 있다', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    server.use(http.get('/api/slides/:id', () => HttpResponse.json({ message: 'Internal Server Error' }, { status: 500 })));
+    const user = userEvent.setup();
+    render(<App />);
+    const panel = screen.getByRole('region', { name: '슬라이드 상세' });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(panel, 'scrollIntoView', { value: scrollIntoView });
+    await user.click((await screen.findAllByRole('button', { name: /S-2026-/ }))[0]);
+    await screen.findByRole('button', { name: '상세 다시 시도' });
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledOnce());
+  });
+
   it('Ki67 0을 결과로 표시하고 heatmap을 조절한다', async () => {
     const user = userEvent.setup();
     render(<App />);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getSlide, getSlides } from './api/client';
 import type { SlideDetail, SlideListResponse } from './api/types';
 import { formatDate, maskPatientName, statusLabel } from './utils/format';
@@ -26,10 +26,13 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(initial.slide);
   const [detail, setDetail] = useState<SlideDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<{ id: string; message: string } | null>(null);
   const [detailRetry, setDetailRetry] = useState(0);
+  const detailPanelRef = useRef<HTMLElement>(null);
+  const pendingScrollId = useRef<string | null>(null);
 
   function navigate(next: { q: string; page: number; slide: string | null }) {
+    if (!next.slide) pendingScrollId.current = null;
     const url = new URL(window.location.href);
     for (const key of ['q', 'page', 'slide']) url.searchParams.delete(key);
     if (next.q) url.searchParams.set('q', next.q);
@@ -43,6 +46,7 @@ export default function App() {
 
   useEffect(() => {
     const restore = () => {
+      pendingScrollId.current = null;
       const next = readLocation();
       setDraft(next.q);
       setQ(next.q);
@@ -84,11 +88,30 @@ export default function App() {
     getSlide(selectedId, controller.signal)
       .then((result) => { if (!controller.signal.aborted) setDetail(result); })
       .catch((cause: unknown) => {
-        if (!controller.signal.aborted) setDetailError(cause instanceof Error ? cause.message : '상세를 불러오지 못했습니다.');
+        if (!controller.signal.aborted) setDetailError({ id: selectedId, message: cause instanceof Error ? cause.message : '상세를 불러오지 못했습니다.' });
       })
       .finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
     return () => controller.abort();
   }, [selectedId, detailRetry]);
+
+  useEffect(() => {
+    if (pendingScrollId.current !== selectedId || detailLoading || (detail?.id !== selectedId && detailError?.id !== selectedId)) return;
+    pendingScrollId.current = null;
+    detailPanelRef.current?.focus({ preventScroll: true });
+    detailPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }, [selectedId, detailLoading, detail, detailError]);
+
+  function selectSlide(id: string) {
+    if (window.matchMedia?.('(max-width: 820px)').matches) {
+      if (selectedId === id && !detailLoading && (detail?.id === id || detailError?.id === id)) {
+        detailPanelRef.current?.focus({ preventScroll: true });
+        detailPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      } else {
+        pendingScrollId.current = id;
+      }
+    }
+    navigate({ q, page, slide: id });
+  }
 
   const totalPages = Math.max(1, Math.ceil((list?.total ?? 0) / 20));
   function onItemKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
@@ -110,7 +133,7 @@ export default function App() {
           <ul aria-label="슬라이드 목록" className="slide-list">
             {list.items.map((slide) => (
               <li key={slide.id}>
-                <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onKeyDown={onItemKeyDown} onClick={() => navigate({ q, page, slide: slide.id })}>
+                <button type="button" className="slide-item" aria-pressed={selectedId === slide.id} onKeyDown={onItemKeyDown} onClick={() => selectSlide(slide.id)}>
                   <img src={slide.thumbnailUrl} alt="" />
                   <span><strong>{slide.id}</strong><span>{maskPatientName(slide.patientName)}</span><time dateTime={slide.examinedAt}>{formatDate(slide.examinedAt)}</time></span>
                   <span className={`badge ${slide.status}`}>{statusLabel(slide.status)}</span>
@@ -127,11 +150,11 @@ export default function App() {
           </nav>
         )}
       </section>
-      <section className="detail-panel" aria-label="슬라이드 상세">
+      <section className="detail-panel" aria-label="슬라이드 상세" ref={detailPanelRef} tabIndex={-1}>
         {!selectedId && <p className="detail-empty">목록에서 슬라이드를 선택해 주세요.</p>}
         {selectedId && detailLoading && <p role="status">상세를 불러오는 중입니다.</p>}
-        {selectedId && !detailLoading && detailError && <div role="alert"><p>{detailError}</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)}>상세 다시 시도</button></div>}
-        {selectedId && !detailLoading && !detailError && detail?.id === selectedId && <SlideDetailPanel key={selectedId} slide={detail} />}
+        {selectedId && !detailLoading && detailError?.id === selectedId && <div role="alert"><p>{detailError.message}</p><button type="button" onClick={() => setDetailRetry((value) => value + 1)}>상세 다시 시도</button></div>}
+        {selectedId && !detailLoading && detailError?.id !== selectedId && detail?.id === selectedId && <SlideDetailPanel key={selectedId} slide={detail} />}
       </section></div>
     </main>
   );
